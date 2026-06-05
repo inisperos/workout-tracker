@@ -106,6 +106,8 @@ if (Array.isArray(fullHistoryArray)) {
 export default function App() {
   // --- NAVIGATION STATE ---
   const [currentScreen, setCurrentScreen] = useState('DASHBOARD');
+  const [selectedStatsExercise, setSelectedStatsExercise] = useState(null);
+  const [timeframe, setTimeframe] = useState('ALL');
   
   // --- CORE SYSTEM STATE ---
   const [muscleData, setMuscleData] = useState(INITIAL_MUSCLE_DATA);
@@ -430,6 +432,12 @@ export default function App() {
             <button onClick={handleSundayReset} style={{ fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>
               Reset to Sunday
             </button>
+            <button 
+              onClick={() => setCurrentScreen('STATS_DASHBOARD')} 
+              style={{ fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              View All Stats
+            </button>
           </div>
 
           <div style={{ marginBottom: '20px' }}>
@@ -683,6 +691,215 @@ export default function App() {
           </div>
         </>
       )}
+      {/* --- SCREEN F: STATS DASHBOARD --- */}
+      {currentScreen === 'STATS_DASHBOARD' && (
+        <>
+          {/* Header row structural layout modified with a spacer block to mirror Screen A's 3-item grid exactly */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#111827', margin: 0 }}>Stats</h1>
+
+            {/* Timeframe Filter Buttons */}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '20px' }}>
+              {[
+                { id: 'ALL', label: 'All Time' },
+                { id: '30', label: '30 Days' },
+                { id: '90', label: '90 Days' }
+              ].map((btn) => (
+                <button
+                  key={btn.id}
+                  onClick={() => setTimeframe(btn.id)}
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    padding: '6px 14px',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    border: 'none',
+                    background: timeframe === btn.id ? '#4b5563' : '#e5e7eb',
+                    color: timeframe === btn.id ? '#ffffff' : '#374151',
+                    transition: 'all 0.1s'
+                  }}
+                >
+                  {btn.label}
+                </button>
+              ))}
+            </div>
+            <br />
+            
+            {/* Invisible layout balancer to make the width flow identical to Screen A */}
+            <div style={{ flex: 1 }}></div> 
+            
+            <button 
+              onClick={() => { setCurrentScreen('DASHBOARD'); setExpandedMuscleId(null); }} 
+              style={{ fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              ← Main Dashboard
+            </button>
+          </div>
+
+          {['upper', 'lower'].map((regionKey) => (
+            <div key={regionKey} style={{ marginBottom: '20px' }}>
+              {/* Text tracking column lines */}
+              <div style={{ display: 'grid', gridTemplateColumns: '6fr 1fr 1fr', columnGap: '12px', fontWeight: '700', paddingBottom: '6px', fontSize: '14px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <div>{regionKey === 'upper' ? 'Upper Body' : 'Lower Body'}</div>
+                <div style={{ textAlign: 'center' }}>Freq</div>
+                <div style={{ textAlign: 'center' }}>Sets</div>
+              </div>
+
+              {/* Muscle Group Rows */}
+              {muscleData[regionKey].map((group) => {
+                const isExpanded = expandedMuscleId === group.id;
+
+                // Calculate totals dynamically based on selected timeframe
+                let totalHistoricalSets = 0;
+                let uniqueDatesTracked = new Set();
+
+                const now = new Date();
+
+                group.exercises.forEach(ex => {
+                  if (Array.isArray(ex.lastSessionStr)) {
+                    ex.lastSessionStr.forEach(session => {
+                      if (!session.date) return;
+
+                      // Date Filtering Logic
+                      if (timeframe !== 'ALL') {
+                        const sessionDate = new Date(session.date);
+                        const daysDifference = (now - sessionDate) / (1000 * 60 * 60 * 24);
+                        
+                        if (timeframe === '30' && daysDifference > 30) return;
+                        if (timeframe === '90' && daysDifference > 90) return;
+                      }
+
+                      uniqueDatesTracked.add(session.date);
+                      if (Array.isArray(session.sets)) totalHistoricalSets += session.sets.length;
+                    });
+                  }
+                });
+
+                const totalHistoricalFrequency = uniqueDatesTracked.size;
+
+                return (
+                  <div key={group.id} style={{ marginBottom: '8px' }}>
+                    {/* Main Row Box - Structural Carbon Copy of renderMuscleGroupRows */}
+                    <div 
+                      onClick={() => setExpandedMuscleId(isExpanded ? null : group.id)}
+                      style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: '6fr 1fr 1fr', 
+                        alignItems: 'center', 
+                        padding: '20px 24px', 
+                        borderRadius: '8px', 
+                        background: '#ffffff', // Kept pure white like Screen A to eliminate row weight differences
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.06)', 
+                        cursor: 'pointer', 
+                        border: isExpanded ? '1px solid #3b82f6' : '1px solid transparent' // Blue focus ring matching Screen A
+                      }}
+                    >
+                      <span style={{ fontWeight: '600', fontSize: '14px', color: '#1f2937' }}>{group.name}</span>
+                      <div style={{ textAlign: 'center' }}>
+                        <span style={{ background: '#e0f2fe', width: '44px', textAlign: 'center', borderRadius: '12px', fontSize: '13px', fontWeight: 'bold', padding: '3px 0', color: '#0369a1' }}>{totalHistoricalFrequency}x</span>
+                      </div>
+                      <div style={{textAlign: 'center' }}>
+                        <span style={{ background: '#e0f2fe', width: '44px', textAlign: 'center', borderRadius: '12px', fontSize: '13px', fontWeight: 'bold', padding: '3px 0', color: '#0369a1' }}>{totalHistoricalSets}</span>
+                      </div>
+                    </div>
+
+                    {/* Sub-Exercises Accordion List Box */}
+                    {isExpanded && (
+                      <div style={{ 
+                        background: '#f3f4f6', 
+                        padding: '12px', 
+                        borderRadius: '0 0 8px 8px', 
+                        marginTop: '-4px', 
+                        borderTop: '1px solid #e5e7eb',
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        gap: '8px' 
+                      }}>
+                        {group.exercises.map((ex) => (
+                          <div key={ex.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f43f5e', color: 'white', padding: '10px 14px', borderRadius: '20px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{ex.name}</span>
+                              <span style={{ fontSize: '11px', opacity: 0.9 }}>PR: {ex.pr || 'None'}</span>
+                            </div>
+                            <button 
+                              onClick={() => { setSelectedStatsExercise(ex); setCurrentScreen('EXERCISE_HISTORY_NOTES'); }}
+                              style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }}
+                            >
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                          </div>
+                        ))}
+                        {group.exercises.length === 0 && <div style={{ fontSize: '12px', color: '#6b7280', fontStyle: 'italic', textAlign: 'center', padding: '4px' }}>No movements added here yet.</div>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* --- SCREEN G: EXERCISE HISTORY NOTES --- */}
+      {currentScreen === 'EXERCISE_HISTORY_NOTES' && selectedStatsExercise && (
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '78vh', justifyContent: 'space-between' }}>
+          <div>
+            <h1 style={{ fontSize: '28px', fontWeight: '800', color: '#000000', marginBottom: '24px', marginTop: '10px', textAlign: 'center' }}>
+              {selectedStatsExercise.name} History
+            </h1>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingLeft: '8px', maxWidth: '100%' }}>
+            {Array.isArray(selectedStatsExercise.lastSessionStr) && selectedStatsExercise.lastSessionStr.length > 0 ? (
+            [...selectedStatsExercise.lastSessionStr]
+              .sort((a, b) => {
+                // Sorts YYYY-MM-DD strings descending (most recent first)
+                if (!a.date) return 1;
+                if (!b.date) return -1;
+                return b.date.localeCompare(a.date);
+              })
+              .map((session, index) => {
+                  // Reformat stored continuous string dates 'YYYY-MM-DD' down to clean 'M/D' notes display
+                  const rawDateParts = session.date ? session.date.split('-') : [];
+                  const displayShortDate = rawDateParts.length === 3 ? `${parseInt(rawDateParts[1])}/${parseInt(rawDateParts[2])}` : 'Log Entry';
+
+                  return (
+                    <div key={index} style={{ borderLeft: '2px solid #e5e7eb', paddingLeft: '12px' }}>
+                      <div style={{ fontWeight: '800', fontSize: '16px', color: '#000000', marginBottom: '4px' }}>
+                        {displayShortDate}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        {Array.isArray(session.sets) ? (
+                          session.sets.map((set, setIdx) => (
+                            <div key={setIdx} style={{ fontSize: '14px', color: '#374151', fontFamily: 'monospace' }}>
+                              {set}
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ fontSize: '14px', color: '#374151' }}>{session}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ color: '#9ca3af', fontStyle: 'italic', textAlign: 'center', marginTop: '40px' }}>
+                  No full notebook logs found for this movement yet.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button 
+            onClick={() => { setCurrentScreen('STATS_DASHBOARD'); }} 
+            style={{ alignSelf: 'flex-start', background: '#6b7280', color: 'white', border: 'none', padding: '12px 24px', borderRadius: '12px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', marginTop: '30px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
+          >
+            Back
+          </button>
+        </div>
+      )}
+
+                
 
     </div>
   );
