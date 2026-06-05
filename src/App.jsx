@@ -44,14 +44,16 @@ const calculatePRString = (currentHistoryPrStr, incomingSetsArray, fullHistoryAr
     allSetTokens.push(...incomingSetsArray.map(s => s.trim().toLowerCase()));
   }
 
-  // 3. Scan historical multi-session arrays
-  if (Array.isArray(fullHistoryArray)) {
-    fullHistoryArray.forEach(sessionStr => {
-      if (sessionStr && typeof sessionStr === 'string') {
-        allSetTokens.push(...sessionStr.split(',').map(s => s.trim().toLowerCase()));
-      }
-    });
-  }
+ // 3. Scan historical multi-session object arrays
+if (Array.isArray(fullHistoryArray)) {
+  fullHistoryArray.forEach(sessionObj => {
+    if (sessionObj && Array.isArray(sessionObj.sets)) {
+      allSetTokens.push(...sessionObj.sets.map(s => s.trim().toLowerCase()));
+    } else if (typeof sessionObj === 'string') {
+      allSetTokens.push(...sessionObj.split(',').map(s => s.trim().toLowerCase()));
+    }
+  });
+}
 
   let maxOneRepWeight = -1;
   let maxVolWeight = -1;
@@ -194,6 +196,23 @@ export default function App() {
     const targetGroupId = activeExerciseWorkspace.muscleGroup.id;
     const exerciseName = activeExerciseWorkspace.exercise.name;
 
+    // Calculate the most recent Sunday reset timestamp at midnight local time
+    const todayObj = new Date();
+    const currentDayOfWeek = todayObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const lastSundayObj = new Date(todayObj);
+    lastSundayObj.setDate(todayObj.getDate() - currentDayOfWeek);
+    lastSundayObj.setHours(0, 0, 0, 0);
+
+    // Parse the incoming resolved date string
+    const resolvedDate = logForm.date === 'Today' 
+      ? new Date().toISOString().split('T')[0] // localDateString variable from your previous step
+      : logForm.customDate;
+      
+    const logDateObj = new Date(resolvedDate + 'T00:00:00');
+
+    // Check if the logged workout is before the current week's Sunday reset window
+    const isBackdatedToPriorWeek = logDateObj < lastSundayObj;
+
     if (newlyAddedSetsCount === 0) {
       setCurrentScreen('ACTIVE_SESSION');
       return;
@@ -206,7 +225,13 @@ export default function App() {
     }
 
     // Construct Display Log Lines
-    const workoutSummaryLine = `${exerciseName}: ${validEnteredSets.join(', ')}`;
+    // 1. Establish the session execution date string for the dashboard display line
+    const logDateString = logForm.date === 'Today' 
+    ? new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }) 
+    : logForm.customDate ? logForm.customDate.split('-').slice(1).join('/') : ''; // Formats YYYY-MM-DD to MM/DD
+
+    // 2. Construct Display Log Lines with Date included
+    const workoutSummaryLine = `${logDateString ? `[${logDateString}] ` : ''}${exerciseName}: ${validEnteredSets.join(', ')}`;
 
     // Check if any exercise belonging to this muscle group has already been completed in this session
     const groupAlreadyHitInSession = activeExerciseWorkspace.muscleGroup.exercises.some(ex => 
@@ -223,19 +248,41 @@ export default function App() {
       if (m.id === targetGroupId) {
         return {
           ...m,
-          frequency: m.frequency + frequencyIncrement,
-          volume: m.volume + newlyAddedSetsCount,
-          weeklySets: [...m.weeklySets, workoutSummaryLine],
-          // Loop through exercises inside this muscle group to update the specific logged exercise
+          // Only increment active weekly stats if the workout happened during THIS week
+          frequency: isBackdatedToPriorWeek ? m.frequency : m.frequency + frequencyIncrement,
+          volume: isBackdatedToPriorWeek ? m.volume : m.volume + newlyAddedSetsCount,
+          weeklySets: isBackdatedToPriorWeek ? m.weeklySets : [...m.weeklySets, workoutSummaryLine],
+          
+          // Always update the standalone group history array so it saves to the accordion preview
+          lastSession: isBackdatedToPriorWeek ? [workoutSummaryLine] : m.lastSession,
+          
           exercises: m.exercises.map(ex => {
             if (ex.id === activeExerciseWorkspace.exercise.id) {
               // Parse existing history into an array or handle initial blank arrays
-              const currentHistoryArray = Array.isArray(ex.lastSessionStr) 
-                ? ex.lastSessionStr 
-                : (ex.lastSessionStr && ex.lastSessionStr !== 'None' ? [ex.lastSessionStr] : []);
-              
-              // Keep only the most recent entry if we are appending a new session row, capped at 2 records
-              const updatedHistoryArray = [formattedSetsString, ...currentHistoryArray].slice(0, 2);
+              // 1. Establish the session execution date string
+              // 1. Establish the session execution date string using Local Time instead of UTC
+              const localToday = new Date();
+              const year = localToday.getFullYear();
+              const month = String(localToday.getMonth() + 1).padStart(2, '0');
+              const day = String(localToday.getDate()).padStart(2, '0');
+              const localDateString = `${year}-${month}-${day}`; // Always matches your local YYYY-MM-DD
+
+              const resolvedDate = logForm.date === 'Today' 
+                ? localDateString 
+                : logForm.customDate || localDateString;
+
+              const resolvedLocation = logForm.location === 'Other' ? logForm.customLocation || 'Custom Gym' : logForm.location;
+
+              // 2. Format a new structured historical session entry
+              const newSessionRecord = {
+              date: resolvedDate,
+              location: resolvedLocation,
+              sets: validEnteredSets
+              };
+
+              // 3. Keep a complete growing timeline array for future stats, while using slice(0, 2) purely for workspace rendering previews
+              const existingHistory = Array.isArray(ex.lastSessionStr) ? ex.lastSessionStr : [];
+              const updatedHistoryArray = [newSessionRecord, ...existingHistory];
 
               return {
                 ...ex,
@@ -276,22 +323,27 @@ export default function App() {
   };
 
   // --- ACTION: ADD CUSTOM WORKOUT SUBMIT ---
+  // --- ACTION: ADD CUSTOM WORKOUT SUBMIT ---
   const handleSaveCustomWorkout = () => {
     if (!customExerciseForm.name.trim()) return;
 
-    const newExerciseObj = {
-      id: `custom_${Date.now()}`,
-      name: customExerciseForm.name,
-      lastSessionStr: [],
-      pr: 'None'
-    };
-
     const targetId = customExerciseForm.targetMuscleId;
 
-    // 1. Permanently update master lists
+    // 1. Permanently update master lists by just appending a clean, empty exercise object
     const updater = (list) => list.map(m => {
       if (m.id === targetId) {
-        return { ...m, exercises: [...m.exercises, newExerciseObj] };
+        return { 
+          ...m, 
+          exercises: [
+            ...m.exercises, 
+            {
+              id: `custom_${Date.now()}`,
+              name: customExerciseForm.name,
+              lastSessionStr: [], // Fresh custom exercises start with empty history arrays
+              pr: 'None'
+            }
+          ] 
+        };
       }
       return m;
     });
@@ -301,24 +353,26 @@ export default function App() {
 
     setMuscleData({ upper: updatedUpper, lower: updatedLower });
 
-    // 2. Add target group to active template view if missing
+    // 2. Combine the fully updated master list data
     const combinedData = [...updatedUpper, ...updatedLower];
+
+    // 3. Remap the active muscle groups to use the freshly updated objects from master data
     const matchInActive = currentActiveMuscleGroups.find(g => g.id === targetId);
+    
+    let nextActiveGroups = currentActiveMuscleGroups.map(currentGroup => {
+      return combinedData.find(g => g.id === currentGroup.id) || currentGroup;
+    });
 
     if (!matchInActive) {
+      // Pull the new group into today's session if it wasn't already there (e.g. adding Abs on Push day)
       const fullGroupDetails = combinedData.find(g => g.id === targetId);
-      setCurrentActiveMuscleGroups([...currentActiveMuscleGroups, fullGroupDetails]);
-    } else {
-      // If it exists, inject exercise dynamically into active session row view right away
-      setCurrentActiveMuscleGroups(currentActiveMuscleGroups.map(g => {
-        if (g.id === targetId) {
-          return { ...g, exercises: [...g.exercises, newExerciseObj] };
-        }
-        return g;
-      }));
+      if (fullGroupDetails) {
+        nextActiveGroups.push(fullGroupDetails);
+      }
     }
+    setCurrentActiveMuscleGroups(nextActiveGroups);
 
-    // Reset Form and route back
+    // 4. Reset form entries and route back safely
     setCustomExerciseForm({ name: '', targetMuscleId: 'chest' });
     setCurrentScreen('ACTIVE_SESSION');
   };
@@ -419,6 +473,15 @@ export default function App() {
             </div>
           </div>
 
+          {logForm.date === 'Other' && (
+            <input 
+              type="date"
+              value={logForm.customDate}
+              onChange={(e) => setLogForm({ ...logForm, customDate: e.target.value })}
+              style={{ width: '100%', boxSizing: 'border-box', marginTop: '8px', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px' }}
+            />
+          )}
+
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', fontWeight: '700', fontSize: '14px', color: '#4b5563', marginBottom: '8px' }}>Location</label>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -458,10 +521,11 @@ export default function App() {
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '80vh', justifyContent: 'space-between' }}>
           <div>
             <h2 style={{ fontSize: '20px', fontWeight: '800', margin: '0 0 2px 0', color: '#111827' }}>Your {logForm.type} Day</h2>
-            <p style={{ color: '#6b7280', fontSize: '12px', margin: '0 0 16px 0' }}>
+            <p style={{ color: '#6b7280', fontSize: '12px', margin: '0 0 16px 0', lineHeight: '1.5' }}>
+              Date: {logForm.date === 'Today' ? new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : logForm.customDate || 'Not Selected'} <br />
               Location: {logForm.location === 'Other' ? logForm.customLocation || 'Custom Gym' : logForm.location}
             </p>
-
+            
             {currentActiveMuscleGroups.map((group) => (
               <div key={group.id} style={{ background: '#fce7f3', padding: '12px', borderRadius: '12px', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontWeight: '700', fontSize: '14px', color: '#111827' }}>
@@ -477,7 +541,9 @@ export default function App() {
                         <div>
                           <div style={{ fontSize: '13px', fontWeight: '600', textDecoration: isExerciseCompleted ? 'line-through' : 'none' }}>{ex.name}</div>
                           <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                            Last: {Array.isArray(ex.lastSessionStr) ? ex.lastSessionStr[0] || 'None' : ex.lastSessionStr || 'None'}
+                            Last: {Array.isArray(ex.lastSessionStr) && ex.lastSessionStr.length > 0 ? (
+                              `${ex.lastSessionStr[0].date || ''}: ${Array.isArray(ex.lastSessionStr[0].sets) ? ex.lastSessionStr[0].sets.join(', ') : ''}`
+                            ) : 'None'}
                           </div>
                         </div>
                         <button 
@@ -520,7 +586,7 @@ export default function App() {
       )}
 
       {/* --- SCREEN D: LOG EXERCISE WORKSPACE --- */}
-      {currentScreen === 'LOG_EXERCISE' && activeExerciseWorkspace && (
+      {currentScreen === 'LOG_EXERCISE' && activeExerciseWorkspace && activeExerciseWorkspace.exercise && (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '80vh', justifyContent: 'space-between' }}>
           <div>
             <h2 style={{ fontSize: '20px', fontWeight: '800', textAlign: 'center', margin: '0 0 4px 0' }}>{activeExerciseWorkspace.exercise.name}</h2>
@@ -532,7 +598,7 @@ export default function App() {
                   <span style={{ fontWeight: '700', fontSize: '13px', minWidth: '45px' }}>Set {idx + 1}</span>
                   <input 
                     type="text" 
-                    placeholder="70x5" 
+                    placeholder="weightxreps" 
                     value={val} 
                     onChange={(e) => {
                       const updated = [...workspaceSets];
@@ -558,16 +624,19 @@ export default function App() {
                 <strong>History (Last 2 Sessions):</strong>
                 {Array.isArray(activeExerciseWorkspace.exercise.lastSessionStr) ? (
                   activeExerciseWorkspace.exercise.lastSessionStr.length > 0 ? (
-                    activeExerciseWorkspace.exercise.lastSessionStr.map((session, i) => (
-                      <div key={i} style={{ marginTop: '2px', paddingLeft: '4px', color: '#1f2937' }}>
-                        Session {i + 1}: {session}
-                      </div>
-                    ))
+                    activeExerciseWorkspace.exercise.lastSessionStr.slice(0, 2).map((session, i) => {
+                      const displaySets = Array.isArray(session.sets) ? session.sets.join(', ') : session;
+                      return (
+                        <div key={i} style={{ marginTop: '4px', paddingLeft: '4px', color: '#1f2937' }}>
+                          <strong>{session.date || 'Past Session'}</strong> : {displaySets}
+                        </div>
+                      );
+                    })
                   ) : (
                     <div style={{ color: '#9ca3af', fontStyle: 'italic', marginTop: '2px' }}>None</div>
                   )
                 ) : (
-                  <div style={{ marginTop: '2px', color: '#1f2937' }}>{activeExerciseWorkspace.exercise.lastSessionStr || 'None'}</div>
+                  <div style={{ color: '#9ca3af', fontStyle: 'italic', marginTop: '2px' }}>None</div>
                 )}
               </div>
             </div>
@@ -589,7 +658,6 @@ export default function App() {
             <label style={{ display: 'block', fontWeight: '700', fontSize: '14px', color: '#4b5563', marginBottom: '8px' }}>Name</label>
             <input 
               type="text" 
-              placeholder="Incline Bench" 
               value={customExerciseForm.name}
               onChange={(e) => setCustomExerciseForm({ ...customExerciseForm, name: e.target.value })}
               style={{ width: '100%', boxSizing: 'border-box', padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px' }}
