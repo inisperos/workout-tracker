@@ -108,6 +108,7 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState('DASHBOARD');
   const [selectedStatsExercise, setSelectedStatsExercise] = useState(null);
   const [timeframe, setTimeframe] = useState('ALL');
+  const [statsTab, setStatsTab] = useState('Workout'); // 'Workout', 'General'
   
   // --- CORE SYSTEM STATE ---
   const [muscleData, setMuscleData] = useState(INITIAL_MUSCLE_DATA);
@@ -694,41 +695,9 @@ export default function App() {
       {/* --- SCREEN F: STATS DASHBOARD --- */}
       {currentScreen === 'STATS_DASHBOARD' && (
         <>
-          {/* Header row structural layout modified with a spacer block to mirror Screen A's 3-item grid exactly */}
+          {/* Header Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#111827', margin: 0 }}>Stats</h1>
-
-            {/* Timeframe Filter Buttons */}
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '20px' }}>
-              {[
-                { id: 'ALL', label: 'All Time' },
-                { id: '30', label: '30 Days' },
-                { id: '90', label: '90 Days' }
-              ].map((btn) => (
-                <button
-                  key={btn.id}
-                  onClick={() => setTimeframe(btn.id)}
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    padding: '6px 14px',
-                    borderRadius: '20px',
-                    cursor: 'pointer',
-                    border: 'none',
-                    background: timeframe === btn.id ? '#4b5563' : '#e5e7eb',
-                    color: timeframe === btn.id ? '#ffffff' : '#374151',
-                    transition: 'all 0.1s'
-                  }}
-                >
-                  {btn.label}
-                </button>
-              ))}
-            </div>
-            <br />
-            
-            {/* Invisible layout balancer to make the width flow identical to Screen A */}
-            <div style={{ flex: 1 }}></div> 
-            
             <button 
               onClick={() => { setCurrentScreen('DASHBOARD'); setExpandedMuscleId(null); }} 
               style={{ fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
@@ -737,39 +706,81 @@ export default function App() {
             </button>
           </div>
 
-          {['upper', 'lower'].map((regionKey) => (
+          {/* 1. Timeframe Filter Buttons */}
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '16px' }}>
+            {[
+              { id: 'ALL', label: 'All Time' },
+              { id: '30', label: '30 Days' },
+              { id: '90', label: '90 Days' }
+            ].map((btn) => (
+              <button
+                key={btn.id}
+                onClick={() => setTimeframe(btn.id)}
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: timeframe === btn.id ? '#4b5563' : '#e5e7eb',
+                  color: timeframe === btn.id ? '#ffffff' : '#374151',
+                  transition: 'all 0.1s'
+                }}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 2. Sub-Screen View Tabs */}
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginBottom: '24px' }}>
+            {['General', 'Workout'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setStatsTab(tab)}
+                style={{
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  padding: '6px 18px',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: statsTab === tab ? '#4b5563' : '#e5e7eb',
+                  color: statsTab === tab ? '#ffffff' : '#374151',
+                }}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* ==================== WORKOUT VIEW CONTROLLER ==================== */}
+          {statsTab === 'Workout' && ['upper', 'lower'].map((regionKey) => (
             <div key={regionKey} style={{ marginBottom: '20px' }}>
-              {/* Text tracking column lines */}
-              <div style={{ display: 'grid', gridTemplateColumns: '6fr 1fr 1fr', columnGap: '12px', fontWeight: '700', paddingBottom: '6px', fontSize: '14px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', fontWeight: '700', paddingBottom: '6px', fontSize: '14px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <div>{regionKey === 'upper' ? 'Upper Body' : 'Lower Body'}</div>
                 <div style={{ textAlign: 'center' }}>Freq</div>
                 <div style={{ textAlign: 'center' }}>Sets</div>
               </div>
 
-              {/* Muscle Group Rows */}
               {muscleData[regionKey].map((group) => {
                 const isExpanded = expandedMuscleId === group.id;
 
-                // Calculate totals dynamically based on selected timeframe
                 let totalHistoricalSets = 0;
                 let uniqueDatesTracked = new Set();
-
                 const now = new Date();
 
                 group.exercises.forEach(ex => {
                   if (Array.isArray(ex.lastSessionStr)) {
                     ex.lastSessionStr.forEach(session => {
                       if (!session.date) return;
-
-                      // Date Filtering Logic
                       if (timeframe !== 'ALL') {
                         const sessionDate = new Date(session.date);
                         const daysDifference = (now - sessionDate) / (1000 * 60 * 60 * 24);
-                        
                         if (timeframe === '30' && daysDifference > 30) return;
                         if (timeframe === '90' && daysDifference > 90) return;
                       }
-
                       uniqueDatesTracked.add(session.date);
                       if (Array.isArray(session.sets)) totalHistoricalSets += session.sets.length;
                     });
@@ -780,42 +791,31 @@ export default function App() {
 
                 return (
                   <div key={group.id} style={{ marginBottom: '8px' }}>
-                    {/* Main Row Box - Structural Carbon Copy of renderMuscleGroupRows */}
                     <div 
                       onClick={() => setExpandedMuscleId(isExpanded ? null : group.id)}
                       style={{ 
                         display: 'grid', 
-                        gridTemplateColumns: '6fr 1fr 1fr', 
+                        gridTemplateColumns: '2fr 1fr 1fr', 
                         alignItems: 'center', 
-                        padding: '20px 24px', 
+                        padding: '10px 8px', 
                         borderRadius: '8px', 
-                        background: '#ffffff', // Kept pure white like Screen A to eliminate row weight differences
+                        background: '#ffffff', 
                         boxShadow: '0 1px 3px rgba(0,0,0,0.06)', 
                         cursor: 'pointer', 
-                        border: isExpanded ? '1px solid #3b82f6' : '1px solid transparent' // Blue focus ring matching Screen A
+                        border: isExpanded ? '1px solid #3b82f6' : '1px solid transparent' 
                       }}
                     >
                       <span style={{ fontWeight: '600', fontSize: '14px', color: '#1f2937' }}>{group.name}</span>
                       <div style={{ textAlign: 'center' }}>
-                        <span style={{ background: '#e0f2fe', width: '44px', textAlign: 'center', borderRadius: '12px', fontSize: '13px', fontWeight: 'bold', padding: '3px 0', color: '#0369a1' }}>{totalHistoricalFrequency}x</span>
+                        <span style={{ background: '#f3f4f6', width: '44px', textAlign: 'center', borderRadius: '12px', fontSize: '13px', fontWeight: 'bold', padding: '3px 0', display: 'inline-block' }}>{totalHistoricalFrequency}x</span>
                       </div>
-                      <div style={{textAlign: 'center' }}>
-                        <span style={{ background: '#e0f2fe', width: '44px', textAlign: 'center', borderRadius: '12px', fontSize: '13px', fontWeight: 'bold', padding: '3px 0', color: '#0369a1' }}>{totalHistoricalSets}</span>
+                      <div style={{ textAlign: 'center' }}>
+                        <span style={{ background: '#f3f4f6', width: '44px', textAlign: 'center', borderRadius: '12px', fontSize: '13px', fontWeight: 'bold', padding: '3px 0', display: 'inline-block' }}>{totalHistoricalSets}</span>
                       </div>
                     </div>
 
-                    {/* Sub-Exercises Accordion List Box */}
                     {isExpanded && (
-                      <div style={{ 
-                        background: '#f3f4f6', 
-                        padding: '12px', 
-                        borderRadius: '0 0 8px 8px', 
-                        marginTop: '-4px', 
-                        borderTop: '1px solid #e5e7eb',
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        gap: '8px' 
-                      }}>
+                      <div style={{ background: '#f3f4f6', padding: '12px', borderRadius: '0 0 8px 8px', marginTop: '-4px', borderTop: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {group.exercises.map((ex) => (
                           <div key={ex.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f43f5e', color: 'white', padding: '10px 14px', borderRadius: '20px' }}>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -838,6 +838,178 @@ export default function App() {
               })}
             </div>
           ))}
+
+          {/* ==================== GENERAL VIEW CONTROLLER ==================== */}
+          {statsTab === 'General' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px', padding: '0 8px' }}>
+              
+              {/* Data Engine Block - Calculates everything cleanly from your state logs */}
+              {(() => {
+                const now = new Date();
+                
+                // Track unique gym dates globally to avoid counting overlapping muscle sets on the same day twice
+                let uniqueGymDates = new Set();
+                
+                // Track counts for the charts
+                let typeCounts = { Upper: 0, Lower: 0, Push: 0, Pull: 0, Other: 0 };
+                let monthCounts = { Jan: 0, Feb: 0, Mar: 0, Apr: 0, May: 0, Jun: 0, Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0 };
+                const monthKeys = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+                // Process every tracked session in muscleData across all regions
+                Object.keys(muscleData).forEach(region => {
+                  muscleData[region].forEach(group => {
+                    group.exercises.forEach(ex => {
+                      if (Array.isArray(ex.lastSessionStr)) {
+                        ex.lastSessionStr.forEach(session => {
+                          if (!session.date) return;
+                          
+                          // Apply Timeframe Window Filters (30 Days / 90 Days / All)
+                          const sDate = new Date(session.date);
+                          if (timeframe !== 'ALL') {
+                            const diffDays = (now - sDate) / (1000 * 60 * 60 * 24);
+                            if (timeframe === '30' && diffDays > 30) return;
+                            if (timeframe === '90' && diffDays > 90) return;
+                          }
+
+                          // Unique date identifier key to aggregate session distributions
+                          const dateStr = session.date; // "YYYY-MM-DD"
+                          const monthIndex = parseInt(dateStr.split('-')[1], 10) - 1;
+                          const monthName = monthKeys[monthIndex];
+
+                          if (!uniqueGymDates.has(dateStr)) {
+                            uniqueGymDates.add(dateStr);
+                            
+                            // Categorize day type based on targeted muscle groups
+                            const nameLower = group.name.toLowerCase();
+                            if (nameLower.includes('chest') || nameLower.includes('shoulders') || nameLower.includes('triceps')) {
+                              typeCounts.Push++;
+                            } else if (nameLower.includes('lats') || nameLower.includes('upper back') || nameLower.includes('biceps') || nameLower.includes('rear delts')) {
+                              typeCounts.Pull++;
+                            } else if (nameLower.includes('quads') || nameLower.includes('hamstrings') || nameLower.includes('calves') || nameLower.includes('glutes')) {
+                              typeCounts.Lower++;
+                            } else if (region === 'upper') {
+                              typeCounts.Upper++;
+                            } else {
+                              typeCounts.Other++;
+                            }
+
+                            // Accumulate month buckets
+                            if (monthName) {
+                              monthCounts[monthName]++;
+                            }
+                          }
+                        });
+                      }
+                    });
+                  });
+                });
+
+                const totalTimesGone = uniqueGymDates.size;
+
+                // Calculate CSS Conic Gradient Angles for Pie Chart Slices
+                const pieTotal = typeCounts.Upper + typeCounts.Lower + typeCounts.Push + typeCounts.Pull + typeCounts.Other;
+                let pieGradient = '#e5e7eb 0% 100%'; // Default gray if empty
+
+                if (pieTotal > 0) {
+                  const pUpper = (typeCounts.Upper / pieTotal) * 100;
+                  const pLower = (typeCounts.Lower / pieTotal) * 100;
+                  const pPush = (typeCounts.Push / pieTotal) * 100;
+                  const pPull = (typeCounts.Pull / pieTotal) * 100;
+
+                  const s1 = pUpper;
+                  const s2 = s1 + pLower;
+                  const s3 = s2 + pPush;
+                  const s4 = s3 + pPull;
+
+                  pieGradient = `
+                    #3b82f6 0% ${s1}%, 
+                    #ef4444 ${s1}% ${s2}%, 
+                    #f59e0b ${s2}% ${s3}%, 
+                    #10b981 ${s3}% ${s4}%, 
+                    #f43f5e ${s4}% 100%
+                  `;
+                }
+
+                // Find highest monthly value to correctly auto-scale bar charts dynamically
+                const maxMonthVal = Math.max(...Object.values(monthCounts), 1);
+
+                return (
+                  <>
+                    {/* Dynamic Overall Attendance Card */}
+                    <div style={{ background: '#f3f4f6', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
+                      <span style={{ fontSize: '14px', fontWeight: '700', color: '#6b7280', textTransform: 'uppercase' }}>Total Times Gone</span>
+                      <h2 style={{ fontSize: '36px', fontWeight: '900', color: '#111827', margin: '4px 0 0 0' }}>{totalTimesGone}</h2>
+                    </div>
+
+                    {/* Gym Days by Type Pie Chart Section */}
+                    <div>
+                      <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#111827', marginBottom: '12px', textAlign: 'center' }}>Gym Days by Type</h3>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', flexWrap: 'wrap' }}>
+                        
+                        {/* Dynamic Gradient Pie Wheel */}
+                        <div style={{
+                          width: '140px',
+                          height: '140px',
+                          borderRadius: '50%',
+                          background: `conic-gradient(${pieGradient})`,
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          transition: 'background 0.3s ease'
+                        }} />
+                        
+                        {/* Legend Grid Panel */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', fontWeight: '600' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#3b82f6' }}></div>Upper ({typeCounts.Upper})</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ef4444' }}></div>Lower ({typeCounts.Lower})</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#f59e0b' }}></div>Push ({typeCounts.Push})</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#10b981' }}></div>Pull ({typeCounts.Pull})</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#f43f5e' }}></div>Other ({typeCounts.Other})</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Gym Days by Month Bar Chart Section */}
+                    <div>
+                      <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#111827', marginBottom: '16px', textAlign: 'center' }}>Gym Days by Month</h3>
+                      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: '140px', padding: '0 10px', borderBottom: '2px solid #e5e7eb', gap: '4px' }}>
+                        {monthKeys.map((month) => {
+                          const val = monthCounts[month];
+                          // Scale bar heights relative to maximum month log count
+                          const barHeight = val > 0 ? (val / maxMonthVal) * 110 : 0;
+
+                          return (
+                            <div key={month} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '6px' }}>
+                              <div style={{ 
+                                width: '100%', 
+                                height: `${barHeight}px`, 
+                                background: '#3b82f6', 
+                                borderRadius: '4px 4px 0 0',
+                                position: 'relative',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                minHeight: val > 0 ? '16px' : '0px',
+                                transition: 'height 0.3s ease'
+                              }}>
+                                {val > 0 && (
+                                  <span style={{ fontSize: '9px', fontWeight: '800', color: '#ffffff', position: 'absolute', top: '1px' }}>
+                                    {val}
+                                  </span>
+                                )}
+                              </div>
+                              <span style={{ fontSize: '9px', fontWeight: '700', color: '#6b7280', transform: 'rotate(-45deg)', marginTop: '4px', display: 'inline-block' }}>
+                                {month}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{ height: '16px' }}></div>
+                    </div>
+                  </>
+                );
+              })()}
+
+            </div>
+          )}
         </>
       )}
 
