@@ -109,6 +109,8 @@ export default function App() {
   const [selectedStatsExercise, setSelectedStatsExercise] = useState(null);
   const [timeframe, setTimeframe] = useState('ALL');
   const [statsTab, setStatsTab] = useState('Workout'); // 'Workout', 'General'
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(null); // Tracks clicked day
+  const [calendarMonthOffset, setCalendarMonthOffset] = useState(0); // 0 is current month, -1 is last month, etc.
   
   // --- CORE SYSTEM STATE ---
   const [muscleData, setMuscleData] = useState(INITIAL_MUSCLE_DATA);
@@ -152,17 +154,17 @@ export default function App() {
     return '#fee2e2'; 
   };
 
-  // --- SUNDAY RESET EVENT ---
-  const handleSundayReset = () => {
-    const resetData = {
-      upper: muscleData.upper.map(m => ({ ...m, frequency: 0, volume: 0, weeklySets: [] })),
-      lower: muscleData.lower.map(m => ({ ...m, frequency: 0, volume: 0, weeklySets: [] }))
-    };
-    setMuscleData(resetData);
-    setExpandedMuscleId(null);
-    setCompletedExerciseIds([]);
-    setSessionTodaySummary([]);
-  };
+  // // --- SUNDAY RESET EVENT ---
+  // const handleSundayReset = () => {
+  //   const resetData = {
+  //     upper: muscleData.upper.map(m => ({ ...m, frequency: 0, volume: 0, weeklySets: [] })),
+  //     lower: muscleData.lower.map(m => ({ ...m, frequency: 0, volume: 0, weeklySets: [] }))
+  //   };
+  //   setMuscleData(resetData);
+  //   setExpandedMuscleId(null);
+  //   setCompletedExerciseIds([]);
+  //   setSessionTodaySummary([]);
+  // };
 
   // --- ROW EXPANSION CLICK HANDLE ---
   const handleMuscleClick = (id) => {
@@ -429,9 +431,13 @@ export default function App() {
       {currentScreen === 'DASHBOARD' && (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#111827', margin: 0 }}>This Week</h1>
-            <button onClick={handleSundayReset} style={{ fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>
-              Reset to Sunday
+          <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#111827', margin: 0 }}>This Week</h1>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button 
+              onClick={() => setCurrentScreen('CALENDAR_VIEW')} 
+              style={{ fontSize: '12px', background: '#10b981', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              📅 View Calendar
             </button>
             <button 
               onClick={() => setCurrentScreen('STATS_DASHBOARD')} 
@@ -440,6 +446,7 @@ export default function App() {
               View All Stats
             </button>
           </div>
+        </div>
 
           <div style={{ marginBottom: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', fontWeight: '700', paddingBottom: '6px', fontSize: '14px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -512,7 +519,7 @@ export default function App() {
           <div style={{ marginBottom: '32px' }}>
             <label style={{ display: 'block', fontWeight: '700', fontSize: '14px', color: '#4b5563', marginBottom: '8px' }}>Type</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              {['Upper', 'Legs', 'Push', 'Pull', 'Run', 'Pilates'].map((t) => (
+              {['Upper', 'Legs', 'Push', 'Pull'].map((t) => (
                 <button key={t} onClick={() => setLogForm({ ...logForm, type: t })} style={{ padding: '10px', borderRadius: '8px', fontWeight: '600', border: '1px solid #d1d5db', cursor: 'pointer', background: logForm.type === t ? '#4b5563' : '#ffffff', color: logForm.type === t ? '#ffffff' : '#1f2937', fontSize: '13px' }}>{t}</button>
               ))}
             </div>
@@ -1071,7 +1078,196 @@ export default function App() {
         </div>
       )}
 
+    {/* --- SCREEN H: CALENDAR VIEW --- */}
+    {currentScreen === 'CALENDAR_VIEW' && (
+        <>
+          {/* Header Bar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#111827', margin: 0 }}>Workout Calendar</h1>
+            <button 
+              onClick={() => { setCurrentScreen('DASHBOARD'); if(typeof setSelectedCalendarDate === 'function') setSelectedCalendarDate(null); }} 
+              style={{ fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              ← Main Dashboard
+            </button>
+          </div>
+
+          {/* Real-Time Calendar Compute Engine */}
+          {(() => {
+            const offset = typeof calendarMonthOffset !== 'undefined' ? calendarMonthOffset : 0;
+            const selectedDate = typeof selectedCalendarDate !== 'undefined' ? selectedCalendarDate : null;
+
+            const targetDate = new Date();
+            targetDate.setMonth(targetDate.getMonth() + offset);
+            
+            const targetYear = targetDate.getFullYear();
+            const targetMonthIndex = targetDate.getMonth();
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+            const daysInMonth = new Date(targetYear, targetMonthIndex + 1, 0).getDate();
+            let rawStartDay = new Date(targetYear, targetMonthIndex, 1).getDay(); 
+            const startDayOffset = rawStartDay === 0 ? 6 : rawStartDay - 1;
+
+            // 1. Initialize calendar history map
+            let historyMap = {}; 
+
+            // 2. Scan state for tracked lifting data
+            if (typeof muscleData !== 'undefined' && muscleData) {
+              Object.keys(muscleData).forEach(region => {
+                if (Array.isArray(muscleData[region])) {
+                  muscleData[region].forEach(group => {
+                    if (Array.isArray(group.exercises)) {
+                      group.exercises.forEach(ex => {
+                        if (Array.isArray(ex.lastSessionStr)) {
+                          ex.lastSessionStr.forEach(session => {
+                            if (!session.date) return;
+                            
+                            if (!historyMap[session.date]) {
+                              historyMap[session.date] = { lift: false, exercises: [] };
+                            }
+                            
+                            const setsCount = Array.isArray(session.sets) ? session.sets.length : 0;
+                            if (setsCount > 0) {
+                              historyMap[session.date].lift = true; 
+                              historyMap[session.date].exercises.push(`${ex.name} (${setsCount} sets)`);
+                            }
+                          });
+                        }
+                      });
+                    }
+                  });
+                }
+              });
+            }
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 
+                {/* Month Navigator Header Controls */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '10px 16px', borderRadius: '12px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <button 
+                    disabled={offset <= -11 || typeof setCalendarMonthOffset !== 'function'}
+                    onClick={() => { if(typeof setCalendarMonthOffset === 'function') { setCalendarMonthOffset(prev => prev - 1); setSelectedCalendarDate(null); } }}
+                    style={{ background: '#e5e7eb', color: '#374151', border: 'none', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: offset <= -11 ? 'not-allowed' : 'pointer', opacity: offset <= -11 ? 0.4 : 1 }}
+                  >
+                    ◀
+                  </button>
+                  <span style={{ fontSize: '16px', fontWeight: '800', color: '#111827' }}>
+                    {monthNames[targetMonthIndex]} {targetYear}
+                  </span>
+                  <button 
+                    disabled={offset >= 0 || typeof setCalendarMonthOffset !== 'function'}
+                    onClick={() => { if(typeof setCalendarMonthOffset === 'function') { setCalendarMonthOffset(prev => prev + 1); setSelectedCalendarDate(null); } }}
+                    style={{ background: '#e5e7eb', color: '#374151', border: 'none', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: offset >= 0 ? 'not-allowed' : 'pointer', opacity: offset >= 0 ? 0.4 : 1 }}
+                  >
+                    ▶
+                  </button>
+                </div>
+
+                {/* Calendar Grid Container */}
+                <div style={{ background: '#ffffff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                  
+                  {/* Matrix Header Days */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', fontSize: '11px', fontWeight: '700', color: '#9ca3af', marginBottom: '14px' }}>
+                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => <div key={i}>{d}</div>)}
+                  </div>
+
+                  {/* Day Blocks Execution Layer */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', rowGap: '20px', justifyItems: 'center' }}>
+                    {Array.from({ length: startDayOffset }).map((_, idx) => (
+                      <div key={`empty-${idx}`} />
+                    ))}
+
+                    {Array.from({ length: daysInMonth }).map((_, idx) => {
+                      const dayNumber = idx + 1;
+                      const currentDayString = `${targetYear}-${(targetMonthIndex + 1).toString().padStart(2, '0')}-${dayNumber.toString().padStart(2, '0')}`;
+                      
+                      const dayData = historyMap[currentDayString];
+                      const isSelected = selectedDate === currentDayString;
+
+                      return (
+                        <div
+                          key={currentDayString}
+                          onClick={() => { 
+                            if (dayData && typeof setSelectedCalendarDate === 'function') {
+                              setSelectedCalendarDate(isSelected ? null : currentDayString); 
+                            }
+                          }}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            cursor: dayData ? 'pointer' : 'default',
+                            width: '36px',
+                            position: 'relative'
+                          }}
+                        >
+                          <span style={{
+                            fontSize: '13px',
+                            fontWeight: '700',
+                            color: dayData ? '#111827' : '#9ca3af',
+                            borderRadius: '50%',
+                            border: isSelected ? '1px dashed #111827' : '1px solid transparent',
+                            width: '24px',
+                            height: '24px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginBottom: '4px',
+                            background: isSelected ? '#f3f4f6' : 'transparent'
+                          }}>
+                            {dayNumber}
+                         </span>
+
+                          {/* Simplified Single Dot Row Layout: Only showing Red for Lifting days */}
+                          <div style={{ display: 'flex', justifyContent: 'center', height: '5px', position: 'absolute', bottom: '-6px' }}>
+                            {dayData && dayData.lift && (
+                              <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#f43f5e' }} />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* --- DISPLAY ACCORDION PANEL DRAWER --- */}
+                {selectedDate && historyMap[selectedDate] && historyMap[selectedDate].lift && (
+                  <div style={{ 
+                    background: '#f3f4f6', 
+                    borderRadius: '16px', 
+                    padding: '16px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '12px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '800', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Logged Workouts ({selectedDate})
+                    </h4>
+
+                    {/* Lift details container */}
+                    <div style={{ background: '#f43f5e', color: '#ffffff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(244,63,94,0.2)' }}>
+                      <div style={{ fontSize: '15px', fontWeight: '800', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>🏋️</span> Lifting Session Details
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'rgba(0,0,0,0.15)', padding: '10px', borderRadius: '8px' }}>
+                        {historyMap[selectedDate].exercises.length > 0 ? (
+                          historyMap[selectedDate].exercises.map((item, i) => (
+                            <div key={i} style={{ fontSize: '13px', fontWeight: '600' }}>• {item}</div>
+                          ))
+                        ) : (
+                          <div style={{ fontSize: '12px', fontStyle: 'italic', opacity: 0.9 }}>Session tracked without exercises</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </>
+      )}
 
     </div>
   );
