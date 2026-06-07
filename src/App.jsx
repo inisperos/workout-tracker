@@ -1060,14 +1060,20 @@ export default function App() {
 
                 // Process every tracked session in muscleData across all regions
                 Object.keys(muscleData).forEach(region => {
+                  if (!Array.isArray(muscleData[region])) return; // Boundary guard
+                  
                   muscleData[region].forEach(group => {
+                    if (!group || !Array.isArray(group.exercises)) return; // Boundary guard
+                    
                     group.exercises.forEach(ex => {
                       if (Array.isArray(ex.lastSessionStr)) {
                         ex.lastSessionStr.forEach(session => {
-                          if (!session.date) return;
+                          if (!session || !session.date) return;
                           
-                          // Apply Timeframe Window Filters (30 Days / 90 Days / All)
+                          // Apply Timeframe Window Filters Safely
                           const sDate = new Date(session.date);
+                          if (isNaN(sDate.getTime())) return; // Skip if date string is invalid or broken
+                          
                           if (timeframe !== 'ALL') {
                             const diffDays = (now - sDate) / (1000 * 60 * 60 * 24);
                             if (timeframe === '30' && diffDays > 30) return;
@@ -1076,28 +1082,42 @@ export default function App() {
 
                           // Unique date identifier key to aggregate session distributions
                           const dateStr = session.date; // "YYYY-MM-DD"
-                          const monthIndex = parseInt(dateStr.split('-')[1], 10) - 1;
+                          const dateParts = dateStr.split('-');
+                          
+                          // SAFE DATE PARSING GUARD: Ensure month splitting actually exists before accessing it
+                          if (dateParts.length < 2) return;
+                          const monthIndex = parseInt(dateParts[1], 10) - 1;
                           const monthName = monthKeys[monthIndex];
 
                           if (!uniqueGymDates.has(dateStr)) {
                             uniqueGymDates.add(dateStr);
                             
-                            // Categorize day type based on targeted muscle groups
-                            const nameLower = group.name.toLowerCase();
-                            if (nameLower.includes('chest') || nameLower.includes('shoulders') || nameLower.includes('triceps')) {
-                              typeCounts.Push++;
-                            } else if (nameLower.includes('lats') || nameLower.includes('upper back') || nameLower.includes('biceps') || nameLower.includes('rear delts')) {
-                              typeCounts.Pull++;
-                            } else if (nameLower.includes('quads') || nameLower.includes('hamstrings') || nameLower.includes('calves') || nameLower.includes('glutes')) {
-                              typeCounts.Lower++;
-                            } else if (region === 'upper') {
-                              typeCounts.Upper++;
+                            // NEW & FIXED: Prioritize checking the explicit session.type you added in the new commit!
+                            if (session.type) {
+                              const tCap = session.type.charAt(0).toUpperCase() + session.type.slice(1).toLowerCase(); // Normalize case
+                              if (typeCounts.hasOwnProperty(tCap)) {
+                                typeCounts[tCap]++;
+                              } else {
+                                typeCounts.Other++;
+                              }
                             } else {
-                              typeCounts.Other++;
+                              // Fallback layout check for your legacy pre-commit database logs
+                              const nameLower = group.name ? group.name.toLowerCase() : '';
+                              if (nameLower.includes('chest') || nameLower.includes('shoulders') || nameLower.includes('triceps')) {
+                                typeCounts.Push++;
+                              } else if (nameLower.includes('lats') || nameLower.includes('upper back') || nameLower.includes('biceps') || nameLower.includes('rear delts')) {
+                                typeCounts.Pull++;
+                              } else if (nameLower.includes('quads') || nameLower.includes('hamstrings') || nameLower.includes('calves') || nameLower.includes('glutes')) {
+                                typeCounts.Lower++;
+                              } else if (region === 'upper') {
+                                typeCounts.Upper++;
+                              } else {
+                                typeCounts.Other++;
+                              }
                             }
 
-                            // Accumulate month buckets
-                            if (monthName) {
+                            // Accumulate month buckets safely if the name matches nicely
+                            if (monthName && monthCounts.hasOwnProperty(monthName)) {
                               monthCounts[monthName]++;
                             }
                           }
