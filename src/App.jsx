@@ -144,7 +144,7 @@ export default function App() {
   const getFrequencyColor = (freq) => {
     if (freq === 0) return '#ffccd5'; 
     if (freq === 1) return '#fef08a'; 
-    return '#bbf7d0';                 
+    return '#06d6a0';                 
   };
 
   const getVolumeColor = (vol) => {
@@ -386,10 +386,29 @@ export default function App() {
     return groups.map((group) => {
       const isExpanded = expandedMuscleId === group.id;
       return (
-        <div key={group.id} style={{ marginBottom: '8px' }}>
+        /* 1. APPLY BORDER LOGIC TO THE OUTER CONTAINER DIV */
+        <div 
+          key={group.id} 
+          style={{ 
+            marginBottom: '12px',
+            borderRadius: '12px',
+            overflow: 'hidden', // Keeps the dropdown's background color inside the rounded corners
+            background: '#ffffff',
+            border: isExpanded ? '1px solid #3b82f6' : '1px solid #e5e7eb', // Blue outline when expanded
+            boxShadow: isExpanded ? '0 4px 12px rgba(59, 130, 246, 0.08)' : '0 1px 3px rgba(0,0,0,0.06)'
+          }}
+        >
+          {/* 2. REMOVE BORDER/BOX-SHADOW FROM HEADER AND SET BACKGROUND TO TRANSPARENT */}
           <div 
             onClick={() => handleMuscleClick(group.id)}
-            style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', alignItems: 'center', padding: '10px 8px', borderRadius: '8px', background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', cursor: 'pointer', border: isExpanded ? '1px solid #3b82f6' : '1px solid transparent' }}
+            style={{ 
+              display: 'grid', 
+              gridTemplateColumns: '2fr 1fr 1fr', 
+              alignItems: 'center', 
+              padding: '12px 16px', // Slightly wider padding looks cleaner inside cards
+              cursor: 'pointer',
+              background: 'transparent' // Inherits white background from outer container
+            }}
           >
             <span style={{ fontWeight: '600', fontSize: '14px', color: '#1f2937' }}>{group.name}</span>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -400,8 +419,16 @@ export default function App() {
             </div>
           </div>
 
+          {/* 3. CLEAN UP EXPANDED PANEL CORNERS AND MARGINS */}
           {isExpanded && (
-            <div style={{ background: '#f3f4f6', padding: '12px', borderRadius: '0 0 8px 8px', marginTop: '-4px', borderTop: '1px solid #e5e7eb', fontSize: '13px' }}>
+            <div style={{ 
+              background: '#f3f4f6', 
+              padding: '16px', 
+              borderRadius: '0', // Let container overflow clip the corners cleanly
+              marginTop: '0', // Removed negative margin alignment hack
+              borderTop: '1px solid #e5e7eb', 
+              fontSize: '13px' 
+            }}>
               {group.frequency > 0 ? (
                 <div>
                   <div style={{ fontWeight: 'bold', color: '#4b5563', marginBottom: '4px' }}>Sets Done This Week:</div>
@@ -425,28 +452,35 @@ export default function App() {
   };
 
   return (
-    <div style={{ maxWidth: '100%', margin: '20px auto', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', background: '#f9fafb', minHeight: '85vh', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', position: 'relative' }}>
+    <div style={{ width: '600px', maxWidth: '100%', margin: '20px auto', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', background: '#f9fafb', minHeight: '85vh', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', position: 'relative' }}>
       
       {/* --- SCREEN A: MAIN DASHBOARD --- */}
       {currentScreen === 'DASHBOARD' && (
         <>
+          {/* Real-time Header & Controls Array Layout */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#111827', margin: 0 }}>This Week</h1>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button 
-              onClick={() => setCurrentScreen('CALENDAR_VIEW')} 
-              style={{ fontSize: '12px', background: '#10b981', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-            >
-              📅 View Calendar
-            </button>
-            <button 
-              onClick={() => setCurrentScreen('STATS_DASHBOARD')} 
-              style={{ fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-            >
-              View All Stats
-            </button>
+            <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#111827', margin: 0 }}>This Week</h1>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={() => setCurrentScreen('CALENDAR_VIEW')} 
+                style={{ fontSize: '12px', background: '#06d6a0', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
+              >
+                View Calendar
+              </button>
+              <button 
+                onClick={() => setCurrentScreen('STATS_DASHBOARD')} 
+                style={{ fontSize: '12px', background: '#118ab2', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
+              >
+                View All Stats
+              </button>
+              <button 
+                onClick={() => setCurrentScreen('LOG_WORKOUT')} 
+                style={{ fontSize: '12px', background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
+              >
+                Log Workout
+              </button>
+            </div>
           </div>
-        </div>
 
           <div style={{ marginBottom: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', fontWeight: '700', paddingBottom: '6px', fontSize: '14px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -466,13 +500,9 @@ export default function App() {
             {renderMuscleGroupRows(muscleData.lower)}
           </div>
 
-          <div style={{ marginTop: '24px', padding: '10px', background: '#f3f4f6', borderRadius: '8px', fontSize: '11px', color: '#6b7280', textAlign: 'center', lineHeight: '1.4', marginBottom: '60px' }}>
-            <strong>Disclaimer:</strong> This is NOT a sliding 7-day window. Data sets unconditionally reset to 0 every Sunday.
+          <div style={{ marginTop: '24px', padding: '10px', background: '#f3f4f6', borderRadius: '8px', fontSize: '11px', color: '#6b7280', textAlign: 'center', lineHeight: '1.4' }}>
+            This is not a sliding 7-day window. Data sets unconditionally reset to 0 every Sunday.
           </div>
-
-          <button onClick={() => setCurrentScreen('LOG_WORKOUT')} style={{ position: 'absolute', bottom: '20px', right: '20px', width: '56px', height: '56px', borderRadius: '50%', background: '#2563eb', color: '#ffffff', border: 'none', fontSize: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)', cursor: 'pointer' }}>
-            +
-          </button>
         </>
       )}
 
@@ -543,20 +573,30 @@ export default function App() {
             </p>
             
             {currentActiveMuscleGroups.map((group) => (
-              <div key={group.id} style={{ background: '#fce7f3', padding: '12px', borderRadius: '12px', marginBottom: '12px' }}>
+              <div 
+              key={group.id} 
+              style={{ 
+                background: '#f9fafb', 
+                padding: '12px', 
+                borderRadius: '12px', 
+                marginBottom: '12px',
+                border: '1px solid #3b82f6',
+                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.08)'
+              }}
+            >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontWeight: '700', fontSize: '14px', color: '#111827' }}>
-                  <span>{group.name}</span>
-                  <span>{group.frequency}x | Vol: {group.volume}</span>
+                  <span style={{paddingRight: '15px'}}>{group.name}</span>
+                  <span>{group.frequency}x | Weekly Sets: {group.volume}</span>
                 </div>
 
                 {group.exercises && group.exercises.length > 0 ? (
                   group.exercises.map((ex) => {
                     const isExerciseCompleted = completedExerciseIds.includes(ex.id);
                     return (
-                      <div key={ex.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isExerciseCompleted ? '#cbd5e1' : '#ffffff', padding: '8px', borderRadius: '8px', marginBottom: '6px', opacity: isExerciseCompleted ? 0.6 : 1, transition: 'all 0.2s' }}>
-                        <div>
-                          <div style={{ fontSize: '13px', fontWeight: '600', textDecoration: isExerciseCompleted ? 'line-through' : 'none' }}>{ex.name}</div>
-                          <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                      <div key={ex.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isExerciseCompleted ? '#cbd5e1' : '#f43f5e', padding: '8px', borderRadius: '8px', marginBottom: '6px', opacity: isExerciseCompleted ? 0.6 : 1, transition: 'all 0.2s' }}>
+                        <div style={{ textAlign: 'left', paddingLeft: '8px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: '600', color:'#FFFFFF', textDecoration: isExerciseCompleted ? 'line-through' : 'none' }}>{ex.name}</div>
+                          <div style={{ fontSize: '11px', color: isExerciseCompleted ? '#475569' : 'rgba(255, 255, 255, 0.85)' }}>
                             Last: {Array.isArray(ex.lastSessionStr) && ex.lastSessionStr.length > 0 ? (
                               `${ex.lastSessionStr[0].date || ''}: ${Array.isArray(ex.lastSessionStr[0].sets) ? ex.lastSessionStr[0].sets.join(', ') : ''}`
                             ) : 'None'}
@@ -565,7 +605,7 @@ export default function App() {
                         <button 
                           onClick={() => handleInitLogExercise(group, ex)}
                           disabled={isExerciseCompleted}
-                          style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', fontWeight: '700', cursor: isExerciseCompleted ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          style={{ width: '28px', height: '28px', borderRadius: '6px', border: '0px solid #ef476f', background: '#ffffff', color:'#2563eb', fontWeight: '700', cursor: isExerciseCompleted ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >
                           +
                         </button>
@@ -580,9 +620,9 @@ export default function App() {
 
             <button 
               onClick={() => setCurrentScreen('ADD_WORKOUT')} 
-              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px dashed #3b82f6', background: 'transparent', fontWeight: '700', color: '#3b82f6', cursor: 'pointer', fontSize: '14px', marginBottom: '16px' }}
+              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '2px dashed #ef476f', background: 'transparent', fontWeight: '700', color: '#ef476f', cursor: 'pointer', fontSize: '14px', marginBottom: '16px' }}
             >
-              + Add Other Workout
+              + Add New Exercise
             </button>
 
             {sessionTodaySummary.length > 0 && (
@@ -595,7 +635,7 @@ export default function App() {
             )}
           </div>
 
-          <button onClick={() => { setCurrentScreen('DASHBOARD'); setSessionTodaySummary([]); setCompletedExerciseIds([]); }} style={{ width: '100%', padding: '12px', borderRadius: '8px', background: '#4b5563', color: '#ffffff', border: 'none', fontWeight: '700', cursor: 'pointer', marginTop: '16px' }}>
+          <button onClick={() => { setCurrentScreen('DASHBOARD'); setSessionTodaySummary([]); setCompletedExerciseIds([]); }} style={{ width: '100%', padding: '12px', borderRadius: '8px', background: '#2563eb', color: '#ffffff', border: 'none', fontWeight: '700', cursor: 'pointer', marginTop: '16px' }}>
             Done
           </button>
         </div>
@@ -614,7 +654,6 @@ export default function App() {
                   <span style={{ fontWeight: '700', fontSize: '13px', minWidth: '45px' }}>Set {idx + 1}</span>
                   <input 
                     type="text" 
-                    placeholder="weightxreps" 
                     value={val} 
                     onChange={(e) => {
                       const updated = [...workspaceSets];
@@ -699,15 +738,15 @@ export default function App() {
           </div>
         </>
       )}
-      {/* --- SCREEN F: STATS DASHBOARD --- */}
-      {currentScreen === 'STATS_DASHBOARD' && (
+{/* --- SCREEN F: STATS DASHBOARD --- */}
+{currentScreen === 'STATS_DASHBOARD' && (
         <>
           {/* Header Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#111827', margin: 0 }}>Stats</h1>
             <button 
               onClick={() => { setCurrentScreen('DASHBOARD'); setExpandedMuscleId(null); }} 
-              style={{ fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
+              style={{ fontSize: '12px', background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
             >
               ← Main Dashboard
             </button>
@@ -797,19 +836,28 @@ export default function App() {
                 const totalHistoricalFrequency = uniqueDatesTracked.size;
 
                 return (
-                  <div key={group.id} style={{ marginBottom: '8px' }}>
+                  /* 1. STRUCTURAL WRAPPER DIV ADDED HERE TO HOUSE THE UNIFIED OUTLINE */
+                  <div 
+                    key={group.id} 
+                    style={{ 
+                      marginBottom: '12px',
+                      borderRadius: '12px',
+                      overflow: 'hidden', // Forces inner background elements to respect rounding
+                      background: '#ffffff',
+                      border: isExpanded ? '1px solid #3b82f6' : '1px solid #e5e7eb',
+                      boxShadow: isExpanded ? '0 4px 12px rgba(59, 130, 246, 0.08)' : '0 1px 3px rgba(0,0,0,0.06)'
+                    }}
+                  >
+                    {/* 2. INLINE ROW BUTTON WITHOUT BOX SHADOW OR ACCENT BORDERS */}
                     <div 
                       onClick={() => setExpandedMuscleId(isExpanded ? null : group.id)}
                       style={{ 
                         display: 'grid', 
                         gridTemplateColumns: '2fr 1fr 1fr', 
                         alignItems: 'center', 
-                        padding: '10px 8px', 
-                        borderRadius: '8px', 
-                        background: '#ffffff', 
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.06)', 
+                        padding: '12px 16px', 
                         cursor: 'pointer', 
-                        border: isExpanded ? '1px solid #3b82f6' : '1px solid transparent' 
+                        background: 'transparent'
                       }}
                     >
                       <span style={{ fontWeight: '600', fontSize: '14px', color: '#1f2937' }}>{group.name}</span>
@@ -821,8 +869,18 @@ export default function App() {
                       </div>
                     </div>
 
+                    {/* 3. EXPANDED INNER DRAWER ADJUSTED FOR FLUSH ALIGNMENT */}
                     {isExpanded && (
-                      <div style={{ background: '#f3f4f6', padding: '12px', borderRadius: '0 0 8px 8px', marginTop: '-4px', borderTop: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ 
+                        background: '#f3f4f6', 
+                        padding: '16px', 
+                        borderRadius: '0', // Stripped out to let parent wrapper container enforce corners
+                        marginTop: '0', // Cleared alignment margin patch 
+                        borderTop: '1px solid #e5e7eb', 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        gap: '8px' 
+                      }}>
                         {group.exercises.map((ex) => (
                           <div key={ex.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f43f5e', color: 'white', padding: '10px 14px', borderRadius: '20px' }}>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1086,7 +1144,7 @@ export default function App() {
             <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#111827', margin: 0 }}>Workout Calendar</h1>
             <button 
               onClick={() => { setCurrentScreen('DASHBOARD'); if(typeof setSelectedCalendarDate === 'function') setSelectedCalendarDate(null); }} 
-              style={{ fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
+              style={{ fontSize: '12px', background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
             >
               ← Main Dashboard
             </button>
@@ -1249,7 +1307,7 @@ export default function App() {
                     {/* Lift details container */}
                     <div style={{ background: '#f43f5e', color: '#ffffff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(244,63,94,0.2)' }}>
                       <div style={{ fontSize: '15px', fontWeight: '800', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>🏋️</span> Lifting Session Details
+                       Lifting Session Details
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'rgba(0,0,0,0.15)', padding: '10px', borderRadius: '8px' }}>
                         {historyMap[selectedDate].exercises.length > 0 ? (
