@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import * as localforage from 'localforage';
 
 // --- MOCK CONSTANTS BASED ON REQUIREMENTS ---
 const WORKOUT_TYPE_MAPS = {
@@ -116,6 +117,24 @@ export default function App() {
   const [muscleData, setMuscleData] = useState(INITIAL_MUSCLE_DATA);
   const [expandedMuscleId, setExpandedMuscleId] = useState(null);
 
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // Hook 1: Pull data out of the database when the app boots up
+  useEffect(() => {
+    localforage.getItem('userMuscleData').then((savedData) => {
+      if (savedData) {
+        setMuscleData(savedData);
+      }
+    });
+  }, []);
+
+  // Hook 2: Automatically save data to the database whenever muscleData changes
+  useEffect(() => {
+    if (muscleData) {
+      localforage.setItem('userMuscleData', muscleData);
+    }
+  }, [muscleData]);
+
   // --- FORM SELECTION STATES ---
   const [logForm, setLogForm] = useState({
     date: 'Today',
@@ -153,18 +172,6 @@ export default function App() {
     if (vol > 6 && vol <= 8) return '#bbf7d0';  
     return '#fee2e2'; 
   };
-
-  // // --- SUNDAY RESET EVENT ---
-  // const handleSundayReset = () => {
-  //   const resetData = {
-  //     upper: muscleData.upper.map(m => ({ ...m, frequency: 0, volume: 0, weeklySets: [] })),
-  //     lower: muscleData.lower.map(m => ({ ...m, frequency: 0, volume: 0, weeklySets: [] }))
-  //   };
-  //   setMuscleData(resetData);
-  //   setExpandedMuscleId(null);
-  //   setCompletedExerciseIds([]);
-  //   setSessionTodaySummary([]);
-  // };
 
   // --- ROW EXPANSION CLICK HANDLE ---
   const handleMuscleClick = (id) => {
