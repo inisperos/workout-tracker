@@ -355,11 +355,16 @@ export default function App() {
                 : logForm.customDate || localDateString;
 
               const resolvedLocation = logForm.location === 'Other' ? logForm.customLocation || 'Custom Gym' : logForm.location;
+              const resolvedWorkoutType =
+              logForm.type === 'Other'
+                ? logForm.customType
+                : logForm.type;
 
               // 2. Format a new structured historical session entry
               const newSessionRecord = {
               date: resolvedDate,
               location: resolvedLocation,
+              type: resolvedWorkoutType,
               sets: validEnteredSets
               };
 
@@ -1059,72 +1064,105 @@ export default function App() {
                 const monthKeys = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
                 // Process every tracked session in muscleData across all regions
+                // 1. FIRST PASS: Scan all sessions globally to collect the explicit session types by date
+                // --- STEP 1: PRE-SCAN SESSIONS TO GROUP DATA BY DATE ---
+                let sessionsByDate = {};
+
                 Object.keys(muscleData).forEach(region => {
-                  if (!Array.isArray(muscleData[region])) return; // Boundary guard
+                  if (!Array.isArray(muscleData[region])) return;
                   
                   muscleData[region].forEach(group => {
-                    if (!group || !Array.isArray(group.exercises)) return; // Boundary guard
+                    if (!group || !Array.isArray(group.exercises)) return;
                     
                     group.exercises.forEach(ex => {
                       if (Array.isArray(ex.lastSessionStr)) {
                         ex.lastSessionStr.forEach(session => {
                           if (!session || !session.date) return;
                           
-                          // Apply Timeframe Window Filters Safely
+                          // Timeframe Window Filters
                           const sDate = new Date(session.date);
-                          if (isNaN(sDate.getTime())) return; // Skip if date string is invalid or broken
-                          
+                          if (isNaN(sDate.getTime())) return;
                           if (timeframe !== 'ALL') {
                             const diffDays = (now - sDate) / (1000 * 60 * 60 * 24);
                             if (timeframe === '30' && diffDays > 30) return;
                             if (timeframe === '90' && diffDays > 90) return;
                           }
 
-                          // Unique date identifier key to aggregate session distributions
-                          const dateStr = session.date; // "YYYY-MM-DD"
-                          const dateParts = dateStr.split('-');
-                          
-                          // SAFE DATE PARSING GUARD: Ensure month splitting actually exists before accessing it
-                          if (dateParts.length < 2) return;
-                          const monthIndex = parseInt(dateParts[1], 10) - 1;
-                          const monthName = monthKeys[monthIndex];
+                          const dateStr = session.date;
+                          if (!sessionsByDate[dateStr]) {
+                            sessionsByDate[dateStr] = {
+                              explicitTypes: new Set(),
+                              muscleGroups: new Set(),
+                              regions: new Set()
+                            };
+                          }
 
-                          if (!uniqueGymDates.has(dateStr)) {
-                            uniqueGymDates.add(dateStr);
-                            
-                            // NEW & FIXED: Prioritize checking the explicit session.type you added in the new commit!
-                            if (session.type) {
-                              const tCap = session.type.charAt(0).toUpperCase() + session.type.slice(1).toLowerCase(); // Normalize case
-                              if (typeCounts.hasOwnProperty(tCap)) {
-                                typeCounts[tCap]++;
-                              } else {
-                                typeCounts.Other++;
-                              }
-                            } else {
-                              // Fallback layout check for your legacy pre-commit database logs
-                              const nameLower = group.name ? group.name.toLowerCase() : '';
-                              if (nameLower.includes('chest') || nameLower.includes('shoulders') || nameLower.includes('triceps')) {
-                                typeCounts.Push++;
-                              } else if (nameLower.includes('lats') || nameLower.includes('upper back') || nameLower.includes('biceps') || nameLower.includes('rear delts')) {
-                                typeCounts.Pull++;
-                              } else if (nameLower.includes('quads') || nameLower.includes('hamstrings') || nameLower.includes('calves') || nameLower.includes('glutes')) {
-                                typeCounts.Lower++;
-                              } else if (region === 'upper') {
-                                typeCounts.Upper++;
-                              } else {
-                                typeCounts.Other++;
-                              }
-                            }
-
-                            // Accumulate month buckets safely if the name matches nicely
-                            if (monthName && monthCounts.hasOwnProperty(monthName)) {
-                              monthCounts[monthName]++;
-                            }
+                          // Collect all pieces of evidence for this specific date
+                          if (session.type) {
+                            sessionsByDate[dateStr].explicitTypes.add(session.type.trim().toLowerCase());
+                          }
+                          if (group.name) {
+                            sessionsByDate[dateStr].muscleGroups.add(group.name.toLowerCase());
+                          }
+                          if (region) {
+                            sessionsByDate[dateStr].regions.add(region.toLowerCase());
                           }
                         });
                       }
                     });
                   });
+                });
+
+                // --- STEP 2: CATEGORIZE EACH UNIQUE DAY ACCURATELY ---
+                Object.keys(sessionsByDate).forEach(dateStr => {
+                  const dayData = sessionsByDate[dateStr];
+                  uniqueGymDates.add(dateStr); // Add to your global total count
+
+                  // A. PRIORITY 1: Check if you explicitly marked this session as "Upper"
+                  if (dayData.explicitTypes.has('upper')) {
+                    typeCounts.Upper++;
+                  } 
+                  // B. PRIORITY 2: Check your fallback muscle rules for Push, Pull, and Legs
+                  else {
+                    let categorized = false;
+
+                    // Convert sets to arrays for easy matching
+                    const muscles = Array.from(dayData.muscleGroups);
+
+                    const isPush = muscles.some(m => m.includes('chest') || m.includes('shoulders') || m.includes('triceps'));
+                    const isPull = muscles.some(m => m.includes('lats') || m.includes('upper back') || m.includes('biceps') || m.includes('rear delts'));
+                    const isLower = muscles.some(m => m.includes('quads') || m.includes('hamstrings') || m.includes('calves') || m.includes('glutes'));
+
+                    if (dayData.explicitTypes.has('push') || (isPush && !isPull && !isLower)) {
+                      typeCounts.Push++;
+                      categorized = true;
+                    } else if (dayData.explicitTypes.has('pull') || (isPull && !isPush && !isLower)) {
+                      typeCounts.Pull++;
+                      categorized = true;
+                    } else if (dayData.explicitTypes.has('legs') || dayData.explicitTypes.has('lower') || (isLower && !isPush && !isPull)) {
+                      typeCounts.Lower++;
+                      categorized = true;
+                    }
+
+                    // C. FINAL CATCH-ALLS: If it's a true mixed Upper split session or matches legacy rules
+                    if (!categorized) {
+                      if (dayData.explicitTypes.has('upper') || dayData.regions.has('upper')) {
+                        typeCounts.Upper++;
+                      } else {
+                        typeCounts.Other++;
+                      }
+                    }
+                  }
+
+                  // Handle your monthly bar chart increments safely
+                  const dateParts = dateStr.split('-');
+                  if (dateParts.length >= 2) {
+                    const monthIndex = parseInt(dateParts[1], 10) - 1;
+                    const monthName = monthKeys[monthIndex];
+                    if (monthName && monthCounts.hasOwnProperty(monthName)) {
+                      monthCounts[monthName]++;
+                    }
+                  }
                 });
 
                 const totalTimesGone = uniqueGymDates.size;
