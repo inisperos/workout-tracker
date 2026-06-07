@@ -120,11 +120,54 @@ export default function App() {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   // Hook 1: Pull data out of the database when the app boots up
+  // Hook 1: Pull data out of the database when the app boots up & handle Sunday resets
   useEffect(() => {
     localforage.getItem('userMuscleData').then((savedData) => {
       if (savedData) {
-        setMuscleData(savedData);
+        // --- AUTOMATIC SUNDAY RESET LOGIC ---
+        const today = new Date();
+        const currentDayOfWeek = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
+        
+        // Calculate the date string for the most recent Sunday
+        const lastSunday = new Date(today);
+        lastSunday.setDate(today.getDate() - currentDayOfWeek);
+        lastSunday.setHours(0, 0, 0, 0);
+        const lastSundayKey = lastSunday.toDateString();
+
+        // Check if we have already processed a reset for this specific Sunday
+        if (savedData.lastResetSunday !== lastSundayKey) {
+          
+          // 1. Reset upper body muscle group counts
+          const resetUpper = (savedData.upper || INITIAL_MUSCLE_DATA.upper).map(group => ({
+            ...group,
+            frequency: 0,
+            volume: 0,
+            weeklySets: [] // Clear weekly tracking but leave .exercises history untouched!
+          }));
+
+          // 2. Reset lower body muscle group counts
+          const resetLower = (savedData.lower || INITIAL_MUSCLE_DATA.lower).map(group => ({
+            ...group,
+            frequency: 0,
+            volume: 0,
+            weeklySets: []
+          }));
+
+          const freshlyResetData = {
+            ...savedData,
+            upper: resetUpper,
+            lower: resetLower,
+            lastResetSunday: lastSundayKey // Mark this week as reset so it doesn't repeat today
+          };
+
+          setMuscleData(freshlyResetData);
+          localforage.setItem('userMuscleData', freshlyResetData);
+        } else {
+          // No reset needed, just load the saved data normally
+          setMuscleData(savedData);
+        }
       }
+      setIsDataLoaded(true); 
     });
   }, []);
 
@@ -161,16 +204,16 @@ export default function App() {
 
   // --- STRICT COLOR-CODING LOGIC ---
   const getFrequencyColor = (freq) => {
-    if (freq === 0) return '#ffccd5'; 
-    if (freq === 1) return '#fef08a'; 
+    if (freq === 0) return '#ef476f'; 
+    if (freq === 1) return '#ffd166'; 
     return '#06d6a0';                 
   };
 
   const getVolumeColor = (vol) => {
-    if (vol <= 1) return '#ffccd5';             
-    if (vol >= 2 && vol <= 6) return '#fef08a'; 
-    if (vol > 6 && vol <= 8) return '#bbf7d0';  
-    return '#fee2e2'; 
+    if (vol <= 1) return '#ef476f';             
+    if (vol >= 2 && vol < 6) return '#ffd166'; 
+    if (vol >= 6 && vol <= 8) return '#06d6a0';  
+    return '#06d6a0'; 
   };
 
   // --- ROW EXPANSION CLICK HANDLE ---
@@ -201,10 +244,38 @@ export default function App() {
     setCurrentScreen('LOG_EXERCISE');
   };
 
+  const isValidSetFormat = (str) => {
+    return /^\d+(\.\d+)?x\d+$/.test(str.trim());
+  };
+
   // --- ACTION: SAVE DATA PARSED FROM LOG EXERCISE ---
   const handleSaveExerciseLogs = () => {
-    const validEnteredSets = workspaceSets.filter(s => s.trim() !== '');
-    const newlyAddedSetsCount = validEnteredSets.length;
+      const validEnteredSets = workspaceSets.filter(s => s.trim() !== '');
+      const newlyAddedSetsCount = validEnteredSets.length;
+  
+      // --- NEW: STRICT FORMATTING VALIDATION LOOP ---
+      if (newlyAddedSetsCount === 0) {
+        alert("Please add at least one set before saving.");
+        return;
+      }
+  
+      for (let i = 0; i < workspaceSets.length; i++) {
+        const currentSetText = workspaceSets[i].trim();
+        
+        // If they typed something but it doesn't match "weightxreps" (or contains spaces)
+        if (currentSetText !== '' && !isValidSetFormat(currentSetText)) {
+          alert(
+            `⚠️ Formatting Error in Set ${i + 1}!\n\n` +
+            `You entered: "${workspaceSets[i]}"\n\n` +
+            `Please use the strict "weightxreps" format with no spaces.\n` +
+            `• Correct: 70x5 or 27.5x7\n` +
+            `• Incorrect: 70 x 5 (Remove spaces)`
+          );
+          return; // STOPS the function from proceeding or saving bad data
+        }
+      }
+
+
     const targetGroupId = activeExerciseWorkspace.muscleGroup.id;
     const exerciseName = activeExerciseWorkspace.exercise.name;
 
@@ -419,10 +490,10 @@ export default function App() {
           >
             <span style={{ fontWeight: '600', fontSize: '14px', color: '#1f2937' }}>{group.name}</span>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <span style={{ background: getFrequencyColor(group.frequency), width: '44px', textAlign: 'center', borderRadius: '12px', fontSize: '13px', fontWeight: 'bold', padding: '3px 0' }}>{group.frequency}x</span>
+              <span style={{ background: getFrequencyColor(group.frequency), color:'#FFFFFF',width: '44px', textAlign: 'center', borderRadius: '12px', fontSize: '13px', fontWeight: 'bold', padding: '3px 0' }}>{group.frequency}x</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <span style={{ background: getVolumeColor(group.volume), width: '44px', textAlign: 'center', borderRadius: '12px', fontSize: '13px', fontWeight: 'bold', padding: '3px 0' }}>{group.volume}</span>
+              <span style={{ background: getVolumeColor(group.volume), color:'#FFFFFF',width: '44px', textAlign: 'center', borderRadius: '12px', fontSize: '13px', fontWeight: 'bold', padding: '3px 0' }}>{group.volume}</span>
             </div>
           </div>
 
@@ -478,7 +549,7 @@ export default function App() {
                 onClick={() => setCurrentScreen('STATS_DASHBOARD')} 
                 style={{ fontSize: '12px', background: '#118ab2', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
               >
-                View All Stats
+                View Stats
               </button>
               <button 
                 onClick={() => setCurrentScreen('LOG_WORKOUT')} 
@@ -512,7 +583,6 @@ export default function App() {
           </div>
         </>
       )}
-
       {/* --- SCREEN B: LOG WORKOUT SPECIFICATION --- */}
       {currentScreen === 'LOG_WORKOUT' && (
         <>
@@ -531,7 +601,20 @@ export default function App() {
               type="date"
               value={logForm.customDate}
               onChange={(e) => setLogForm({ ...logForm, customDate: e.target.value })}
-              style={{ width: '100%', boxSizing: 'border-box', marginTop: '8px', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px' }}
+              style={{ 
+                width: '100%', 
+                maxWidth: '100%',         
+                boxSizing: 'border-box',  
+                marginTop: '8px', 
+                padding: '10px', 
+                borderRadius: '8px', 
+                border: '1px solid #d1d5db', 
+                fontSize: '14px',
+                WebkitAppearance: 'none',
+                color: '#111827',          // FIXED: Forces date text to black
+                background: '#ffffff',     // FIXED: Forces calendar field to white
+                colorScheme: 'light'       // FIXED: Ensures the pop-up calendar overlay looks normal
+              }}
             />
           )}
 
@@ -548,7 +631,18 @@ export default function App() {
                 placeholder="Enter custom location name..."
                 value={logForm.customLocation}
                 onChange={(e) => setLogForm({ ...logForm, customLocation: e.target.value })}
-                style={{ width: '100%', boxSizing: 'border-box', marginTop: '8px', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px' }}
+                style={{ 
+                  width: '100%', 
+                  boxSizing: 'border-box', 
+                  marginTop: '8px', 
+                  padding: '10px', 
+                  borderRadius: '8px', 
+                  border: '1px solid #d1d5db', 
+                  fontSize: '14px',
+                  color: '#111827',        // FIXED: Forces text to black
+                  background: '#ffffff',   // FIXED: Forces text box background to white
+                  colorScheme: 'light'     // FIXED: Overrides system dark mode
+                }}
               />
             )}
           </div>
@@ -652,13 +746,14 @@ export default function App() {
       {currentScreen === 'LOG_EXERCISE' && activeExerciseWorkspace && activeExerciseWorkspace.exercise && (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '80vh', justifyContent: 'space-between' }}>
           <div>
-            <h2 style={{ fontSize: '20px', fontWeight: '800', textAlign: 'center', margin: '0 0 4px 0' }}>{activeExerciseWorkspace.exercise.name}</h2>
+            {/* FIXED: Locked heading color to deep charcoal instead of letting it default to light grey */}
+            <h2 style={{ fontSize: '20px', fontWeight: '800', textAlign: 'center', margin: '0 0 4px 0', color: '#111827' }}>{activeExerciseWorkspace.exercise.name}</h2>
             <p style={{ fontSize: '12px', color: '#6b7280', textAlign: 'center', marginBottom: '20px' }}>Input reps like "70x5" or "185x5"</p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
               {workspaceSets.map((val, idx) => (
                 <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontWeight: '700', fontSize: '13px', minWidth: '45px' }}>Set {idx + 1}</span>
+                  <span style={{ fontWeight: '700', fontSize: '13px', minWidth: '45px', color: '#374151' }}>Set {idx + 1}</span>
                   <input 
                     type="text" 
                     value={val} 
@@ -667,7 +762,16 @@ export default function App() {
                       updated[idx] = e.target.value;
                       setWorkspaceSets(updated);
                     }}
-                    style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px' }}
+                    style={{ 
+                      flex: 1, 
+                      padding: '10px', 
+                      borderRadius: '8px', 
+                      border: '1px solid #d1d5db', 
+                      fontSize: '16px',
+                      color: '#111827',        // FIXED: Force text input to black
+                      background: '#ffffff',   // FIXED: Force text box background to white
+                      colorScheme: 'light'     // FIXED: Block system dark mode overrides
+                    }}
                   />
                 </div>
               ))}
@@ -722,7 +826,17 @@ export default function App() {
               type="text" 
               value={customExerciseForm.name}
               onChange={(e) => setCustomExerciseForm({ ...customExerciseForm, name: e.target.value })}
-              style={{ width: '100%', boxSizing: 'border-box', padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px' }}
+              style={{ 
+                width: '100%', 
+                boxSizing: 'border-box', 
+                padding: '12px', 
+                borderRadius: '8px', 
+                border: '1px solid #d1d5db', 
+                fontSize: '14px',
+                color: '#111827',          // FIXED: Forces black text
+                background: '#ffffff',     // FIXED: Forces white background
+                colorScheme: 'light'       // FIXED: Overrides system dark mode
+              }}
             />
           </div>
 
@@ -731,10 +845,26 @@ export default function App() {
             <select 
               value={customExerciseForm.targetMuscleId}
               onChange={(e) => setCustomExerciseForm({ ...customExerciseForm, targetMuscleId: e.target.value })}
-              style={{ width: '100%', boxSizing: 'border-box', padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', background: '#ffffff', fontSize: '14px' }}
+              style={{ 
+                width: '100%', 
+                boxSizing: 'border-box', 
+                padding: '12px', 
+                borderRadius: '8px', 
+                border: '1px solid #d1d5db', 
+                fontSize: '14px',
+                color: '#111827',          // FIXED: Forces select box text to black
+                background: '#ffffff',     // FIXED: Forces select box container to white
+                colorScheme: 'light'       // FIXED: Forces dropdown overlay to stay light
+              }}
             >
               {[...muscleData.upper, ...muscleData.lower].map(group => (
-                <option key={group.id} value={group.id}>{group.name}</option>
+                <option 
+                  key={group.id} 
+                  value={group.id}
+                  style={{ color: '#111827', background: '#ffffff' }} // FIXED: Keeps internal dropdown menu readable
+                >
+                  {group.name}
+                </option>
               ))}
             </select>
           </div>
@@ -745,8 +875,9 @@ export default function App() {
           </div>
         </>
       )}
-{/* --- SCREEN F: STATS DASHBOARD --- */}
-{currentScreen === 'STATS_DASHBOARD' && (
+
+      {/* --- SCREEN F: STATS DASHBOARD --- */}
+      {currentScreen === 'STATS_DASHBOARD' && (
         <>
           {/* Header Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -1093,6 +1224,23 @@ export default function App() {
               {selectedStatsExercise.name} History
             </h1>
 
+            {/* --- NEW: CALCULATED PR BOX DISPLAY --- */}
+            <div style={{ 
+              background: '#f3f4f6', 
+              padding: '14px', 
+              borderRadius: '12px', 
+              border: '1px solid #e5e7eb',
+              marginBottom: '24px', 
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '13px', fontWeight: '700', color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Personal Record
+              </div>
+              <div style={{ fontSize: '22px', fontWeight: '900', color: '#2563eb', marginTop: '4px', fontFamily: 'monospace' }}>
+                {selectedStatsExercise.pr || 'None'}
+              </div>
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingLeft: '8px', maxWidth: '100%' }}>
             {Array.isArray(selectedStatsExercise.lastSessionStr) && selectedStatsExercise.lastSessionStr.length > 0 ? (
             [...selectedStatsExercise.lastSessionStr]
@@ -1188,13 +1336,21 @@ export default function App() {
                             if (!session.date) return;
                             
                             if (!historyMap[session.date]) {
-                              historyMap[session.date] = { lift: false, exercises: [] };
+                              // FIXED: Added a types array to collect your logged splits
+                              historyMap[session.date] = { lift: false, types: [], exercises: [] };
                             }
                             
                             const setsCount = Array.isArray(session.sets) ? session.sets.length : 0;
                             if (setsCount > 0) {
                               historyMap[session.date].lift = true; 
-                              historyMap[session.date].exercises.push(`${ex.name} (${setsCount} sets)`);
+                              
+                              // Capture the session split type (Upper, Push, etc.) if recorded
+                              if (session.type && !historyMap[session.date].types.includes(session.type)) {
+                                historyMap[session.date].types.push(session.type);
+                              }
+                              
+                              const setsString = session.sets.join(', ');
+                              historyMap[session.date].exercises.push(`${ex.name}: ${setsString}`);
                             }
                           });
                         }
@@ -1313,13 +1469,16 @@ export default function App() {
 
                     {/* Lift details container */}
                     <div style={{ background: '#f43f5e', color: '#ffffff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(244,63,94,0.2)' }}>
-                      <div style={{ fontSize: '15px', fontWeight: '800', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                       Lifting Session Details
+                      {/* FIXED: Displays the Workout Split Type (e.g., "PUSH SESSION DETAILS") dynamically */}
+                      <div style={{ fontSize: '15px', fontWeight: '800', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase' }}>
+                       {historyMap[selectedDate].types.length > 0 
+                         ? `${historyMap[selectedDate].types.join(' / ')} Session` 
+                         : 'Lifting Session'} Details
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'rgba(0,0,0,0.15)', padding: '10px', borderRadius: '8px' }}>
                         {historyMap[selectedDate].exercises.length > 0 ? (
                           historyMap[selectedDate].exercises.map((item, i) => (
-                            <div key={i} style={{ fontSize: '13px', fontWeight: '600' }}>• {item}</div>
+                            <div key={i} style={{ fontSize: '13px', fontWeight: '600', fontFamily: 'monospace' }}>• {item}</div>
                           ))
                         ) : (
                           <div style={{ fontSize: '12px', fontStyle: 'italic', opacity: 0.9 }}>Session tracked without exercises</div>
